@@ -1,0 +1,25 @@
+{
+  "_comment": "Function-level reachability data for the Security Agent's search_symbol_usage tool. GitHub's Dependabot/advisory API tells you a package+version is vulnerable but not reliably which function; this file is the small, honest fallback the PRD calls for (section 5, step 7) so import-level checks can be tightened to function-level without hand-waving. Verify these against the live Dependabot alerts once the repo is pushed -- advisory IDs and severities can be re-checked at https://github.com/advisories/<GHSA-id>.",
+  "packages": {
+    "pyyaml": {
+      "ghsa_id": "GHSA-8q59-q68h-6hv4",
+      "cve_id": "CVE-2020-14343",
+      "severity": "critical",
+      "cvss": 9.8,
+      "fixed_version": "5.4",
+      "vulnerable_functions": ["yaml.full_load", "yaml.unsafe_load", "yaml.load"],
+      "safe_alternative": "yaml.safe_load",
+      "note": "yaml.load is only unsafe when called without Loader=yaml.SafeLoader"
+    },
+    "pillow": {
+      "ghsa_id": "GHSA-8vj2-vxx3-667w",
+      "cve_id": "CVE-2022-22817",
+      "severity": "critical",
+      "cvss": 9.8,
+      "fixed_version": "9.0.1",
+      "vulnerable_functions": ["PIL.ImageMath.eval", "ImageMath.eval"],
+      "safe_alternative": null,
+      "note": "Image.open/thumbnail/save/convert do not touch ImageMath.eval"
+    }
+  }
+}
