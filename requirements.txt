@@ -1,0 +1,20 @@
+# PINNED TO PYTHON 3.8 -- see README "Python version" section. pyyaml==5.3.1
+# has no prebuilt wheel for Python 3.10+ (needs a C compiler to build from
+# source), which will burn hours on hackathon day if someone's laptop has a
+# newer Python. Verified locally: 3.8 has clean wheels for both CVE deps
+# below; 3.10 does not. CI (ci.yml) is pinned to match.
+
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+httpx==0.26.0
+
+# --- DEMO: deliberately outdated / CVE-bearing, do not bump before judging ---
+pyyaml==5.3.1
+# CVE-2020-14343 / GHSA-8q59-q68h-6hv4, critical 9.8, fixed in 5.4
+# Reachable in this repo: app/config.py calls yaml.full_load()
+
+pillow==8.4.0
+# CVE-2022-22817 / GHSA-8vj2-vxx3-667w, critical 9.8, fixed in 9.0.1
+# Unreachable in this repo: app/image_utils.py never calls PIL.ImageMath.eval
+# (8.1.0 also carries this CVE but has no Windows wheel for any dev laptop
+# Python >=3.9; 8.4.0 is still < 9.0.1 so still vulnerable, with wheels.)

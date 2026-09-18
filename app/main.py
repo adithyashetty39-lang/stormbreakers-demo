@@ -1,0 +1,33 @@
+"""FastAPI app tying the demo shop together.
+
+Small, deliberately boring surface: enough real endpoints that GitHub Actions,
+CodeQL, and Dependabot all have something to look at, without needing a
+database. See config.py and image_utils.py for the CVE demo scenarios, and
+pricing.py for the plain business logic used by test_flaky.py's history.
+"""
+from __future__ import annotations
+
+from fastapi import FastAPI, HTTPException
+
+from app.pricing import InvalidQuantityError, cart_total, free_shipping_eligible
+
+app = FastAPI(title="Stormbreakers Demo Shop")
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.post("/cart/total")
+def cart_total_endpoint(payload: dict) -> dict:
+    items = payload.get("items", [])
+    discount_pct = payload.get("discount_pct", 0.0)
+    try:
+        total = cart_total(items, discount_pct)
+    except (InvalidQuantityError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "total": total,
+        "free_shipping": free_shipping_eligible(total),
+    }
