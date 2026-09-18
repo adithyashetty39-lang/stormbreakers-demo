@@ -1,0 +1,99 @@
+name: CI
+
+# Single workflow file on purpose: AutoRelease AI's WF-0 ingest listens for
+# one `workflow_run` "completed" event per commit and expects test + coverage
+# + code-scanning results to all belong to that one run. Splitting this into
+# multiple workflow files means multiple workflow_run events per sha and
+# more correlation logic on the n8n side than the hackathon budget allows.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write   # required for CodeQL + gitleaks SARIF upload
+  actions: read
+
+jobs:
+  test:
+    name: Test & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"   # must match requirements.txt pin -- see its header comment
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests with JUnit + coverage
+        run: |
+          pytest \
+            --junitxml=reports/junit.xml \
+            --cov=app --cov-report=xml:reports/coverage.xml --cov-report=term
+        # Intentionally NOT `continue-on-error` — a red run here is expected
+        # and correct behavior for the flaky-test / regression demo scenarios.
+        continue-on-error: true
+
+      - name: Upload JUnit + coverage artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: reports/
+          retention-days: 30
+
+      - name: Fail job if tests failed
+        run: |
+          if [ -f reports/junit.xml ] && grep -q 'failures="0"' reports/junit.xml && grep -q 'errors="0"' reports/junit.xml; then
+            echo "all tests passed"
+          else
+            echo "tests failed -- see reports/junit.xml"
+            exit 1
+          fi
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  gitleaks:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks (SARIF output)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
+          GITLEAKS_ENABLE_SUMMARY: true
+        continue-on-error: true   # never block CI itself; AutoRelease AI's
+                                   # BLOCK gate is the enforcement point, not
+                                   # this job's exit code.
+
+      - name: Upload gitleaks SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          # VERIFY ON HOUR 0: confirm this is still the output filename for
+          # the pinned gitleaks-action version before relying on it live --
+          # check the action's current README/CHANGELOG.
+          sarif_file: results.sarif
+        continue-on-error: true

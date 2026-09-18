@@ -1,0 +1,42 @@
+name: Deploy
+
+# Only ever triggered by workflow_dispatch, and only ever called by n8n
+# AFTER a human clicks Approve on the AutoRelease AI report. This is the
+# demo's "real action" -- a visible thing actually happens on Approve, but
+# a human always triggers it (PRD section 1: non-negotiable, permanent).
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "AutoRelease AI run_id that authorized this deploy"
+        required: true
+      score:
+        description: "AutoRelease score at time of approval"
+        required: true
+      approver:
+        description: "who clicked Approve"
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy (simulated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Deploy banner"
+        run: |
+          echo "================================================"
+          echo " AutoRelease AI authorized this deployment"
+          echo " run_id:   ${{ inputs.run_id }}"
+          echo " score:    ${{ inputs.score }}"
+          echo " approver: ${{ inputs.approver }}"
+          echo " sha:      ${{ github.sha }}"
+          echo "================================================"
+
+      # Swap this step for a real deploy target if you have one
+      # (GitHub Pages / a free-tier host) -- purely optional polish.
+      - name: Deploy to GitHub Pages (optional)
+        if: false
+        run: echo "wire up actions/deploy-pages here if desired"
