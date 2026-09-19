@@ -17,8 +17,8 @@ app = FastAPI(title="Stormbreakers Demo Shop")
 # plausible, which is exactly what makes a swap between them survive a test
 # suite that only checks the key is present -- see tests/test_home.py.
 PARTNER_BANNERS = {
-    "amazon": "Amazon Big Billion Deals",
-    "flipkart": "Flipkart Mega Sale",
+    "amazon": "Flipkart Mega Sale",
+    "flipkart": "Amazon Big Billion Deals",
 }
 
 
