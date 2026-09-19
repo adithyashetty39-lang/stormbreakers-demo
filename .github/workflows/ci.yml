@@ -5,6 +5,10 @@ name: CI
 # + code-scanning results to all belong to that one run. Splitting this into
 # multiple workflow files means multiple workflow_run events per sha and
 # more correlation logic on the n8n side than the hackathon budget allows.
+#
+# The semantic-probe job below is a JOB, not a second workflow file, for
+# exactly that reason. Its artifact is named `semantic-captures`; WF-0 filters
+# artifacts by the exact name `test-results`, so ingest is unaffected by it.
 
 on:
   push:
@@ -58,6 +62,70 @@ jobs:
             echo "tests failed -- see reports/junit.xml"
             exit 1
           fi
+
+  semantic-probe:
+    # Captures the app's ACTUAL responses on both sides of the PR so
+    # AutoRelease AI can compare behaviour, not just test outcomes. A green
+    # suite only asserts what somebody thought to assert; this captures what
+    # the app really returned.
+    name: Semantic Response Probe
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need base history available locally to check it out below, and the
+          # real head commit rather than the synthetic merge commit.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+        continue-on-error: true
+
+      - name: Stage the probe contract and runner outside the worktree
+        # Both captures must be taken with the HEAD version of the contract and
+        # runner, otherwise a PR that edits probes.json would be compared
+        # against a different probe set and every difference would look real.
+        # Staging in /tmp also means the base commit does not need these files
+        # to exist, which matters for the first PR that introduces them.
+        run: |
+          mkdir -p /tmp/probe captures
+          cp probes.json /tmp/probe/probes.json
+          cp -r tools /tmp/probe/tools
+        continue-on-error: true
+
+      - name: Capture HEAD responses
+        run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/head_capture.json --label head
+        continue-on-error: true
+
+      - name: Check out the PR base commit
+        run: git checkout --force ${{ github.event.pull_request.base.sha }}
+        continue-on-error: true
+
+      - name: Capture BASE responses
+        run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/base_capture.json --label base
+        continue-on-error: true
+
+      - name: Upload captures
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semantic-captures
+          path: captures/
+          retention-days: 30
+        continue-on-error: true
+
+      # NOTE ON continue-on-error: a missing capture must never be read as
+      # "nothing diverged". That guarantee is enforced on the AutoRelease AI
+      # side, which reports `semantic.available: false` and states plainly that
+      # the check did not run. It is enforced there rather than here so that a
+      # probe failure cannot flip this workflow's conclusion and corrupt the
+      # flaky-test and regression scenarios that depend on it.
 
   codeql:
     name: CodeQL
