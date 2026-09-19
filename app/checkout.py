@@ -41,6 +41,11 @@ def _subtotal(items: list) -> float:
     return round(subtotal, 2)
 
 
+def _shipping_for(taxable_amount: float) -> float:
+    """Shipping charged on an order of this (post-discount) value."""
+    return 0.0 if taxable_amount >= FREE_SHIPPING_MIN else SHIPPING_FEE
+
+
 def quote(items: list, coupon_pct: float = 0.0) -> dict:
     if not 0 <= coupon_pct <= MAX_COUPON_PCT:
         raise QuoteError(f"coupon_pct must be between 0 and {MAX_COUPON_PCT}: {coupon_pct}")
@@ -49,8 +54,8 @@ def quote(items: list, coupon_pct: float = 0.0) -> dict:
     discount = round(subtotal * coupon_pct / 100, 2)
     taxable_amount = round(subtotal - discount, 2)
     gst = round(taxable_amount * GST_RATE, 2)
-    shipping = 0.0 if taxable_amount >= FREE_SHIPPING_MIN else SHIPPING_FEE
-    total = round(taxable_amount + gst + shipping, 2)
+    shipping = _shipping_for(taxable_amount)
+    total = round(sum((taxable_amount, gst, shipping)), 2)
 
     return {
         "subtotal": subtotal,
