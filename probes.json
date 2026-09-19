@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "_comment": "Contract file for the semantic regression check. It asserts NOTHING. It only declares which responses are worth capturing on base and head so they can be compared. identity_tokens says what a response is supposed to be about, which is what makes a value that stops being about it detectable.",
+  "probes": [
+    {
+      "id": "home_amazon",
+      "method": "GET",
+      "path": "/home?partner=amazon",
+      "identity_tokens": ["amazon"],
+      "foreign_tokens": ["amazon", "flipkart"]
+    },
+    {
+      "id": "home_flipkart",
+      "method": "GET",
+      "path": "/home?partner=flipkart",
+      "identity_tokens": ["flipkart"],
+      "foreign_tokens": ["amazon", "flipkart"]
+    },
+    {
+      "id": "health",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "id": "cart_total_basic",
+      "method": "POST",
+      "path": "/cart/total",
+      "json": { "items": [{ "unit_price": 25.0, "quantity": 2 }], "discount_pct": 0 }
+    },
+    {
+      "id": "cart_total_discounted",
+      "method": "POST",
+      "path": "/cart/total",
+      "json": { "items": [{ "unit_price": 20.0, "quantity": 5 }], "discount_pct": 10 }
+    },
+    {
+      "id": "cart_total_free_shipping_boundary",
+      "method": "POST",
+      "path": "/cart/total",
+      "json": { "items": [{ "unit_price": 49.99, "quantity": 1 }], "discount_pct": 0 }
+    }
+  ]
+}
