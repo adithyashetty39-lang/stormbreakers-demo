@@ -87,20 +87,35 @@ jobs:
         run: pip install -r requirements-dev.txt
         continue-on-error: true
 
-      - name: Stage the probe contract and runner outside the worktree
-        # Both captures must be taken with the HEAD version of the contract and
-        # runner, otherwise a PR that edits probes.json would be compared
-        # against a different probe set and every difference would look real.
-        # Staging in /tmp also means the base commit does not need these files
-        # to exist, which matters for the first PR that introduces them.
+      - name: Stage the behaviour contract and checker from the BASE commit
+        # The contract (probes.json) and its checker (tools/) are the rules this
+        # PR is judged by, so they come from the BASE commit whenever it has
+        # them: a PR cannot loosen the rules that judge it. If this PR edits
+        # them, that is recorded and surfaced in the report. The first PR that
+        # introduces the checker has no base copy, so it falls back to HEAD.
+        # Both captures use the same staged copy, so they are always compared
+        # under one set of rules. Staged in /tmp so checking out base later
+        # cannot remove them.
         run: |
           mkdir -p /tmp/probe captures
-          cp probes.json /tmp/probe/probes.json
-          cp -r tools /tmp/probe/tools
+          BASE=${{ github.event.pull_request.base.sha }}
+          if git cat-file -e "$BASE:tools/invariants.py" 2>/dev/null && git cat-file -e "$BASE:probes.json" 2>/dev/null; then
+            SOURCE=base
+            git show "$BASE:probes.json" > /tmp/probe/probes.json
+            git archive "$BASE" tools | tar -x -C /tmp/probe
+          else
+            SOURCE=head
+            cp probes.json /tmp/probe/probes.json
+            cp -r tools /tmp/probe/tools
+          fi
+          if git diff --quiet "$BASE" HEAD -- probes.json tools; then CHANGED=false; else CHANGED=true; fi
+          echo "CONTRACT_SOURCE=$SOURCE" >> "$GITHUB_ENV"
+          echo "CONTRACT_CHANGED=$CHANGED" >> "$GITHUB_ENV"
+          echo "contract and checker taken from $SOURCE commit; modified in this PR: $CHANGED"
         continue-on-error: true
 
       - name: Capture HEAD responses
-        run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/head_capture.json --label head
+        run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/head_capture.json --label head --contract-source "$CONTRACT_SOURCE" --contract-changed "$CONTRACT_CHANGED"
         env:
           # Running a script by absolute path puts THAT script's directory on
           # sys.path, not the working directory, so `from app.main import app`
@@ -114,7 +129,7 @@ jobs:
         continue-on-error: true
 
       - name: Capture BASE responses
-        run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/base_capture.json --label base
+        run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/base_capture.json --label base --contract-source "$CONTRACT_SOURCE" --contract-changed "$CONTRACT_CHANGED"
         env:
           PYTHONPATH: ${{ github.workspace }}
         continue-on-error: true
