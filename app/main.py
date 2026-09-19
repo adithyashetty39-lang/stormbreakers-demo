@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
+from app.checkout import QuoteError, quote
 from app.pricing import InvalidQuantityError, cart_total, free_shipping_eligible
 
 app = FastAPI(title="Stormbreakers Demo Shop")
@@ -50,3 +51,11 @@ def cart_total_endpoint(payload: dict) -> dict:
         "total": total,
         "free_shipping": free_shipping_eligible(total),
     }
+
+
+@app.post("/checkout/quote")
+def checkout_quote(payload: dict) -> dict:
+    try:
+        return quote(payload.get("items", []), float(payload.get("coupon_pct", 0.0)))
+    except (QuoteError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

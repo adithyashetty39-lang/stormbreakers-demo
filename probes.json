@@ -1,43 +1,81 @@
 {
-  "version": 1,
-  "_comment": "Contract file for the semantic regression check. It asserts NOTHING. It only declares which responses are worth capturing on base and head so they can be compared. identity_tokens says what a response is supposed to be about, which is what makes a value that stops being about it detectable.",
+  "version": 2,
+  "_comment": "Behaviour contract for the semantic regression check. `probes` declares which responses to capture on base and head; it asserts nothing. `invariants` are business rules that must hold for the captured responses. A rule that held on the base commit and fails on the head commit is a deterministic regression, whatever the tests say. The contract and the checker are always taken from the BASE commit, so a PR cannot loosen the rules it is judged by. Rules are small expressions over `body` (the response), `request` (what was sent) and probe('<id>') (another probe's response), evaluated by tools/invariants.py against an allowlist, not eval().",
   "probes": [
+    { "id": "home_amazon", "method": "GET", "path": "/home?partner=amazon", "identity_tokens": ["amazon"], "foreign_tokens": ["amazon", "flipkart"] },
+    { "id": "home_flipkart", "method": "GET", "path": "/home?partner=flipkart", "identity_tokens": ["flipkart"], "foreign_tokens": ["amazon", "flipkart"] },
+    { "id": "health", "method": "GET", "path": "/health" },
+    { "id": "cart_total_basic", "method": "POST", "path": "/cart/total", "json": { "items": [{ "unit_price": 25.0, "quantity": 2 }], "discount_pct": 0 } },
+    { "id": "cart_total_discounted", "method": "POST", "path": "/cart/total", "json": { "items": [{ "unit_price": 20.0, "quantity": 5 }], "discount_pct": 10 } },
+    { "id": "cart_total_same_items_undiscounted", "method": "POST", "path": "/cart/total", "json": { "items": [{ "unit_price": 20.0, "quantity": 5 }], "discount_pct": 0 } },
+    { "id": "cart_total_free_shipping_boundary", "method": "POST", "path": "/cart/total", "json": { "items": [{ "unit_price": 49.99, "quantity": 1 }], "discount_pct": 0 } },
+
+    { "id": "quote_no_coupon", "method": "POST", "path": "/checkout/quote", "json": { "items": [{ "unit_price": 999.0, "quantity": 1 }], "coupon_pct": 0 } },
+    { "id": "quote_coupon_20", "method": "POST", "path": "/checkout/quote", "json": { "items": [{ "unit_price": 999.0, "quantity": 1 }], "coupon_pct": 20 } },
+    { "id": "quote_exactly_free_shipping_min", "method": "POST", "path": "/checkout/quote", "json": { "items": [{ "unit_price": 499.0, "quantity": 1 }], "coupon_pct": 0 } },
+    { "id": "quote_coupon_drops_below_free_shipping", "method": "POST", "path": "/checkout/quote", "json": { "items": [{ "unit_price": 550.0, "quantity": 1 }], "coupon_pct": 10 } },
+    { "id": "quote_multi_item", "method": "POST", "path": "/checkout/quote", "json": { "items": [{ "unit_price": 120.0, "quantity": 3 }, { "unit_price": 45.5, "quantity": 2 }], "coupon_pct": 15 } }
+  ],
+  "invariants": [
     {
-      "id": "home_amazon",
-      "method": "GET",
-      "path": "/home?partner=amazon",
-      "identity_tokens": ["amazon"],
-      "foreign_tokens": ["amazon", "flipkart"]
+      "id": "checkout_subtotal_matches_items",
+      "description": "Subtotal equals the sum of unit price x quantity over the items sent",
+      "rule": "approx(body.subtotal, sum(i.unit_price * i.quantity for i in request.items))",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_exactly_free_shipping_min", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
     },
     {
-      "id": "home_flipkart",
-      "method": "GET",
-      "path": "/home?partner=flipkart",
-      "identity_tokens": ["flipkart"],
-      "foreign_tokens": ["amazon", "flipkart"]
+      "id": "checkout_discount_matches_coupon",
+      "description": "Discount equals the coupon percentage of the subtotal",
+      "rule": "approx(body.discount, body.subtotal * request.coupon_pct / 100)",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
     },
     {
-      "id": "health",
-      "method": "GET",
-      "path": "/health"
+      "id": "checkout_taxable_is_subtotal_minus_discount",
+      "description": "Taxable amount is the subtotal minus the discount",
+      "rule": "approx(body.taxable_amount, body.subtotal - body.discount)",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_exactly_free_shipping_min", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
     },
     {
-      "id": "cart_total_basic",
-      "method": "POST",
-      "path": "/cart/total",
-      "json": { "items": [{ "unit_price": 25.0, "quantity": 2 }], "discount_pct": 0 }
+      "id": "checkout_gst_on_discounted_value",
+      "description": "GST is 18% of the taxable (post-discount) amount, not of the list price",
+      "rule": "approx(body.gst, body.taxable_amount * 0.18)",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_exactly_free_shipping_min", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
     },
     {
-      "id": "cart_total_discounted",
-      "method": "POST",
-      "path": "/cart/total",
-      "json": { "items": [{ "unit_price": 20.0, "quantity": 5 }], "discount_pct": 10 }
+      "id": "checkout_shipping_rule",
+      "description": "Orders worth at least 499 after discount ship free; others pay 49",
+      "rule": "body.shipping == (0 if body.taxable_amount >= 499 else 49)",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_exactly_free_shipping_min", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
     },
     {
-      "id": "cart_total_free_shipping_boundary",
-      "method": "POST",
-      "path": "/cart/total",
-      "json": { "items": [{ "unit_price": 49.99, "quantity": 1 }], "discount_pct": 0 }
+      "id": "checkout_total_balances",
+      "description": "Total equals taxable amount + GST + shipping, and nothing else",
+      "rule": "approx(body.total, body.taxable_amount + body.gst + body.shipping)",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_exactly_free_shipping_min", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
+    },
+    {
+      "id": "checkout_free_shipping_flag_consistent",
+      "description": "free_shipping is true exactly when no shipping is charged",
+      "rule": "body.free_shipping == (body.shipping == 0)",
+      "applies_to": ["quote_no_coupon", "quote_coupon_20", "quote_exactly_free_shipping_min", "quote_coupon_drops_below_free_shipping", "quote_multi_item"]
+    },
+    {
+      "id": "checkout_coupon_never_raises_price",
+      "description": "Applying a coupon never makes the same cart cost more",
+      "rule": "probe('quote_coupon_20').total <= probe('quote_no_coupon').total",
+      "applies_to": ["quote_coupon_20"]
+    },
+    {
+      "id": "cart_discount_never_raises_total",
+      "description": "Applying a discount never makes the same cart cost more",
+      "rule": "probe('cart_total_discounted').total <= probe('cart_total_same_items_undiscounted').total",
+      "applies_to": ["cart_total_discounted"]
+    },
+    {
+      "id": "cart_free_shipping_flag_consistent",
+      "description": "free_shipping is true exactly when the cart total is at least 50",
+      "rule": "body.free_shipping == (body.total >= 50)",
+      "applies_to": ["cart_total_basic", "cart_total_discounted", "cart_total_same_items_undiscounted", "cart_total_free_shipping_boundary"]
     }
   ]
 }
