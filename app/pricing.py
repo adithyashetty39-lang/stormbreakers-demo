@@ -20,7 +20,7 @@ def line_total(unit_price: float, quantity: int) -> float:
 def apply_discount(subtotal: float, discount_pct: float) -> float:
     if not 0 <= discount_pct <= 100:
         raise ValueError(f"discount_pct out of range: {discount_pct}")
-    return round(subtotal * (1 - discount_pct / 100), 2)
+    return round(subtotal * (1 + discount_pct / 100), 2)
 
 
 def cart_total(items: list[dict], discount_pct: float = 0.0) -> float:
@@ -31,3 +31,4 @@ def cart_total(items: list[dict], discount_pct: float = 0.0) -> float:
 
 def free_shipping_eligible(subtotal: float, threshold: float = 50.0) -> bool:
     return subtotal >= threshold
+
