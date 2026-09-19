@@ -60,3 +60,12 @@ score matrix.
 
 No database, no auth, no frontend. This app exists to be validated, not to
 be a real shop — don't over-invest in it.
+
+## Running locally
+
+```bash
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload
+```
+
+Then open http://127.0.0.1:8000/docs for the interactive API.
