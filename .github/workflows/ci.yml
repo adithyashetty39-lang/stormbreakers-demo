@@ -101,6 +101,12 @@ jobs:
 
       - name: Capture HEAD responses
         run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/head_capture.json --label head
+        env:
+          # Running a script by absolute path puts THAT script's directory on
+          # sys.path, not the working directory, so `from app.main import app`
+          # fails with ModuleNotFoundError. The runner lives in /tmp by design
+          # (see the staging step), so the workspace has to be named explicitly.
+          PYTHONPATH: ${{ github.workspace }}
         continue-on-error: true
 
       - name: Check out the PR base commit
@@ -109,7 +115,26 @@ jobs:
 
       - name: Capture BASE responses
         run: python /tmp/probe/tools/probe_runner.py --probes /tmp/probe/probes.json --out captures/base_capture.json --label base
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         continue-on-error: true
+
+      - name: Record capture status
+        # An absent artifact is ambiguous -- it could mean "nothing to report".
+        # This writes the outcome down explicitly so a failed capture arrives as
+        # data that says it failed, rather than as silence. It also guarantees
+        # the upload below always has something to upload.
+        if: always()
+        run: |
+          mkdir -p captures
+          HEAD_OK=false; BASE_OK=false
+          [ -f captures/head_capture.json ] && HEAD_OK=true
+          [ -f captures/base_capture.json ] && BASE_OK=true
+          printf '{"head_capture_present":%s,"base_capture_present":%s}\n' "$HEAD_OK" "$BASE_OK" > captures/CAPTURE_STATUS.json
+          cat captures/CAPTURE_STATUS.json
+          if [ "$HEAD_OK" != true ] || [ "$BASE_OK" != true ]; then
+            echo "::warning::semantic probe incomplete -- AutoRelease AI will report the check as not run"
+          fi
 
       - name: Upload captures
         uses: actions/upload-artifact@v4
