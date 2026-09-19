@@ -48,7 +48,7 @@ def quote(items: list, coupon_pct: float = 0.0) -> dict:
     subtotal = _subtotal(items)
     discount = round(subtotal * coupon_pct / 100, 2)
     taxable_amount = round(subtotal - discount, 2)
-    gst = round(taxable_amount * GST_RATE, 2)
+    gst = round(subtotal * GST_RATE, 2)
     shipping = 0.0 if taxable_amount >= FREE_SHIPPING_MIN else SHIPPING_FEE
     total = round(taxable_amount + gst + shipping, 2)
 
@@ -62,3 +62,4 @@ def quote(items: list, coupon_pct: float = 0.0) -> dict:
         "free_shipping": shipping == 0.0,
         "currency": "INR",
     }
+
